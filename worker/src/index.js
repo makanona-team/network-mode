@@ -96,7 +96,7 @@ export default {
       const b = await body(req);
       const k = 'compat:' + clip(b.model, 60) + ':' + clip(b.id, 40);
       const rep = String(b.report || '');
-      const ok = /طريقة التطبيق: Shizuku|طريقة التطبيق: Root/.test(rep) && /\[OK\] قراءة النمط/.test(rep);
+      const ok = /Apply method: (SHIZUKU|ROOT)/.test(rep) && /\[OK\] Read mode/.test(rep);
       await env.KV.put(k, JSON.stringify(b).slice(0, 25000), {
         metadata: { vc: b.vc | 0, model: clip(b.model, 60), android: clip(b.android, 10), method: clip(b.method, 10), ok, ts: Date.now() },
         expirationTtl: 180 * 86400,

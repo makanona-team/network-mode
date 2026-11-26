@@ -5,6 +5,9 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
+import android.provider.Settings
+import android.telecom.TelecomManager
 import rikka.shizuku.Shizuku
 import java.util.concurrent.TimeUnit
 
@@ -13,25 +16,28 @@ const val G3 = 2
 const val G4 = 4
 const val G5 = 8
 
-/** أنماط الشبكة. fam = العائلات المسموحة (2G/3G/4G/5G). */
+/** أنماط الشبكة. الأسماء والشروح بالإنكليزي دائماً. fam = العائلات المسموحة. */
 enum class Mode(
     val title: String,
     val sub: String,
     val fam: Int,
     val radioInfo: String,
+    val samsung: String?,
     val warn: String? = null
 ) {
-    AUTO("تلقائي شامل", "5G / 4G / 3G / 2G — الوضع الطبيعي", G2 or G3 or G4 or G5, "NR/LTE/GSM/WCDMA"),
-    LTE_CALLS("4G + مكالمات", "إنترنت 4G، والمكالمات تنزل لـ 3G/2G وترجع", G2 or G3 or G4, "LTE/GSM/WCDMA"),
-    LTE_3G("4G / 3G", "بدون 2G", G3 or G4, "LTE/WCDMA"),
-    LTE_ONLY("LTE فقط", "4G فقط بدون نزول", G4, "LTE only",
-        "المكالمات والرسائل قد لا تصلك إذا كان VoLTE غير مفعّل"),
-    NR_LTE("5G / 4G", "يحتاج هاتفاً ومشغّلاً يدعمان 5G", G4 or G5, "NR/LTE"),
-    NR_ONLY("5G فقط", "فقط حيث تتوفر 5G", G5, "NR only", "إذا لم تتوفر 5G ستبقى بلا شبكة"),
-    WCDMA_GSM("3G / 2G", "بدون 4G", G2 or G3, "GSM/WCDMA auto"),
-    WCDMA_ONLY("3G فقط", "", G3, "WCDMA only"),
-    GSM_ONLY("2G فقط (GSM)", "مكالمات ثابتة، إنترنت بطيء جداً", G2, "GSM only",
-        "الإنترنت على 2G بطيء جداً");
+    AUTO("Auto (5G/4G/3G/2G)", "Normal mode — best available network", G2 or G3 or G4 or G5,
+        "NR/LTE/GSM/WCDMA", "5G/LTE/3G/2G (auto connect)"),
+    LTE_CALLS("4G + Calls (LTE/3G/2G)", "4G data, calls fall back to 3G/2G", G2 or G3 or G4,
+        "LTE/GSM/WCDMA", "LTE/3G/2G (auto connect)"),
+    LTE_3G("4G / 3G (LTE/WCDMA)", "No 2G", G3 or G4, "LTE/WCDMA", null),
+    LTE_ONLY("LTE Only", "4G only, no fallback", G4, "LTE only", null,
+        "Calls and SMS may fail without VoLTE"),
+    NR_LTE("5G / 4G (NR/LTE)", "Needs 5G phone and operator", G4 or G5, "NR/LTE", null),
+    NR_ONLY("5G Only", "Only where 5G is available", G5, "NR only", null, "No service where 5G is missing"),
+    WCDMA_GSM("3G / 2G (WCDMA/GSM)", "No 4G", G2 or G3, "GSM/WCDMA auto", "3G/2G (auto connect)"),
+    WCDMA_ONLY("3G Only", "WCDMA only", G3, "WCDMA only", "3G only"),
+    GSM_ONLY("2G Only (GSM)", "Stable calls, very slow data", G2, "GSM only", "2G only",
+        "Data on 2G is very slow");
 
     val mask: Long get() = Net.famToMask(fam)
 
@@ -43,12 +49,12 @@ enum class Mode(
 }
 
 fun famLabel(f: Int?): String {
-    if (f == null) return "غير معروف"
+    if (f == null) return tr("غير معروف", "Unknown")
     Mode.byFam(f)?.let { return it.title }
     val p = mutableListOf<String>()
     if (f and G5 != 0) p += "5G"; if (f and G4 != 0) p += "4G"
     if (f and G3 != 0) p += "3G"; if (f and G2 != 0) p += "2G"
-    return if (p.isEmpty()) "غير معروف" else p.joinToString(" / ")
+    return if (p.isEmpty()) tr("غير معروف", "Unknown") else p.joinToString(" / ")
 }
 
 /** تشغيل أوامر بصلاحية shell عبر Shizuku أو root. */
@@ -79,7 +85,7 @@ object Shell {
     fun kindLabel(): String = when (kind()) {
         Kind.SHIZUKU -> "Shizuku"
         Kind.ROOT -> "Root"
-        Kind.NONE -> "يدوي (قائمة Phone info)"
+        Kind.NONE -> tr("يدوي", "Manual")
     }
 
     /** يعيد (رمز الخروج، المخرجات). يُستدعى من خيط خلفي فقط. */
@@ -88,7 +94,7 @@ object Shell {
             val p: Process = when (kind()) {
                 Kind.SHIZUKU -> shizukuProcess(arrayOf("sh", "-c", cmd))
                 Kind.ROOT -> Runtime.getRuntime().exec(arrayOf("su", "-c", cmd))
-                Kind.NONE -> return -1 to "لا توجد صلاحية (Shizuku غير مفعّل)"
+                Kind.NONE -> return -1 to tr("لا توجد صلاحية (Shizuku غير مفعّل)", "No permission (Shizuku not active)")
             }
             val out = StringBuilder()
             val t1 = Thread { try { out.append(p.inputStream.bufferedReader().readText()) } catch (_: Exception) {} }
@@ -96,7 +102,7 @@ object Shell {
             val t2 = Thread { try { err.append(p.errorStream.bufferedReader().readText()) } catch (_: Exception) {} }
             t1.start(); t2.start()
             val done = p.waitFor(timeoutSec, TimeUnit.SECONDS)
-            if (!done) { try { p.destroy() } catch (_: Exception) {}; return -2 to "انتهت المهلة" }
+            if (!done) { try { p.destroy() } catch (_: Exception) {}; return -2 to tr("انتهت المهلة", "Timed out") }
             t1.join(1000); t2.join(1000)
             p.exitValue() to (out.toString() + err.toString()).trim()
         } catch (e: Throwable) {
@@ -175,17 +181,17 @@ object Net {
 
     /** يطبّق النمط. يُستدعى من خيط خلفي. */
     fun apply(slot: Int, mode: Mode): Res {
-        if (!Shell.ready()) return Res(false, "Shizuku غير مفعّل")
+        if (!Shell.ready()) return Res(false, tr("Shizuku غير مفعّل", "Shizuku is not active"))
         val bin = java.lang.Long.toBinaryString(mode.mask)
         val (code, out) = Shell.exec("cmd phone set-allowed-network-types-for-users -s $slot $bin")
         if (!out.contains("completed")) {
             Log.add("apply $slot ${mode.name} fail: $code $out")
-            return Res(false, out.ifBlank { "فشل (رمز $code)" })
+            return Res(false, out.ifBlank { tr("فشل (رمز $code)", "Failed (code $code)") })
         }
         val cur = current(slot)
         Log.add("apply $slot ${mode.name} ok, read=${cur}")
         return if (cur == null || cur == mode.fam) Res(true, "")
-        else Res(true, "طُبّق، لكن الهاتف يقرأ: ${famLabel(cur)}")
+        else Res(true, tr("طُبّق، لكن الهاتف يقرأ: ", "Applied, but phone reads: ") + famLabel(cur))
     }
 
     /** تطبيق + حفظ + المؤقت. */
@@ -203,23 +209,52 @@ object Net {
         return r
     }
 
-    /** فتح قائمة Phone info المخفية (الطريقة اليدوية). */
+    val isSamsung get() = Build.MANUFACTURER.equals("samsung", true)
+
+    /** فتح قائمة Phone info المخفية. لا نستخدم ACTION_DIAL العام حتى لا يلتقطه تطبيق آخر (مثل ForceLTE). */
     fun openRadioInfo(c: Context): Boolean {
+        val pm = c.packageManager
         val comps = listOf(
             ComponentName("com.android.phone", "com.android.phone.settings.RadioInfo"),
-            ComponentName("com.android.settings", "com.android.settings.RadioInfo"),
-            ComponentName("com.android.settings", "com.android.settings.Settings\$TestingSettingsActivity")
+            ComponentName("com.android.settings", "com.android.settings.RadioInfo")
         )
         for (cn in comps) {
+            val exported = try { pm.getActivityInfo(cn, 0).exported } catch (_: Exception) { false }
+            if (!exported) continue
             try {
-                c.startActivity(Intent().setComponent(cn).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                c.startActivity(Intent().setComponent(cn).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); return true
+            } catch (_: Exception) {}
+        }
+        // تطبيق الهاتف الافتراضي بالاسم مع الكود
+        val dialers = listOfNotNull(
+            try { c.getSystemService(TelecomManager::class.java)?.defaultDialerPackage } catch (_: Exception) { null },
+            "com.samsung.android.dialer", "com.google.android.dialer", "com.android.dialer"
+        ).distinct()
+        val uri = Uri.parse("tel:" + Uri.encode(SECRET))
+        for (pkg in dialers) {
+            try {
+                c.startActivity(Intent(Intent.ACTION_DIAL, uri).setPackage(pkg).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
                 return true
             } catch (_: Exception) {}
         }
-        return try {
-            c.startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:" + Uri.encode("*#*#4636#*#*")))
-                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); true
-        } catch (_: Exception) { false }
+        return false
+    }
+
+    const val SECRET = "*#*#4636#*#*"
+
+    /** صفحة «الشبكات المحمولة» في إعدادات سامسونج (فيها Network mode لكل شريحة). */
+    fun openSamsungNetwork(c: Context): Boolean {
+        val tries = listOf(
+            Intent().setComponent(ComponentName("com.samsung.android.app.telephonyui",
+                "com.samsung.android.app.telephonyui.netsettings.ui.NetSettingsActivity")),
+            Intent(Settings.ACTION_DATA_ROAMING_SETTINGS),
+            Intent(Settings.ACTION_NETWORK_OPERATOR_SETTINGS),
+            Intent(Settings.ACTION_WIRELESS_SETTINGS)
+        )
+        for (i in tries) {
+            try { c.startActivity(i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); return true } catch (_: Exception) {}
+        }
+        return false
     }
 
     fun radioInfoAvailable(c: Context): Boolean {

@@ -68,12 +68,15 @@ class MainActivity : BaseActivity() {
 
     private fun firstRun() {
         AlertDialog.Builder(this)
-            .setTitle("أهلاً بك في نمط الشبكة")
-            .setMessage("• التطبيق يثبّت نمط الشبكة لكل شريحة.\n\n" +
+            .setTitle(tr("أهلاً بك في نمط الشبكة", "Welcome to Network Mode"))
+            .setMessage(tr("• التطبيق يثبّت نمط الشبكة لكل شريحة.\n\n" +
                 "• يحتاج إذن «الهاتف» ليعرض الشرائح والإشارة، والإشعارات للتنبيهات.\n\n" +
-                "• يرسل للمطوّر فقط: نسخة التطبيق وموديل الجهاز ونسخة أندرويد، ليعرف أي الأجهزة يعمل عليها. لا أرقام ولا مواقع.")
+                "• يرسل للمطوّر فقط: نسخة التطبيق وموديل الجهاز ونسخة أندرويد، ليعرف أي الأجهزة يعمل عليها. لا أرقام ولا مواقع.",
+                "• Locks the network mode for each SIM.\n\n" +
+                "• Needs the Phone permission to show SIMs and signal, and notifications for alerts.\n\n" +
+                "• Sends the developer only: app version, device model and Android version. No numbers, no location."))
             .setCancelable(false)
-            .setPositiveButton("متابعة") { _, _ -> Prefs.firstRunDone = true; askPerms() }
+            .setPositiveButton(tr("متابعة", "Continue")) { _, _ -> Prefs.firstRunDone = true; askPerms() }
             .show()
     }
 
@@ -92,10 +95,10 @@ class MainActivity : BaseActivity() {
     private fun checkForced() {
         if (!Remote.mustUpdate()) return
         AlertDialog.Builder(this)
-            .setTitle("تحديث إجباري")
-            .setMessage("هذه النسخة لم تعد مدعومة. يجب تنزيل النسخة ${Remote.latestName()} للمتابعة.\n\n${Remote.whatsNew()}")
+            .setTitle(tr("تحديث إجباري", "Update required"))
+            .setMessage(tr("هذه النسخة لم تعد مدعومة. يجب تنزيل النسخة ", "This version is no longer supported. Please download version ") + Remote.latestName() + "\n\n" + Remote.whatsNew())
             .setCancelable(false)
-            .setPositiveButton("تنزيل التحديث") { _, _ -> openUrl(Remote.latestUrl()); finish() }
+            .setPositiveButton(tr("تنزيل التحديث", "Download update")) { _, _ -> openUrl(Remote.latestUrl()); finish() }
             .show()
     }
 
@@ -127,7 +130,12 @@ class MainActivity : BaseActivity() {
     private fun render() {
         clear()
         // الشريط العلوي
-        val top = header("نمط الشبكة", back = false)
+        val top = header(tr("نمط الشبكة", "Network Mode"), back = false)
+        top.addView(TextView(this).apply {
+            text = if (L.en()) "ع" else "EN"; textSize = 15f; typeface = Typeface.DEFAULT_BOLD
+            setTextColor(p.accent); setPadding(dp(10), dp(4), dp(10), dp(4))
+            setOnClickListener { Prefs.lang = if (L.en()) "ar" else "en"; Shortcuts.refresh(this@MainActivity); recreate() }
+        })
         val unread = Remote.unread()
         top.addView(TextView(this).apply {
             text = if (unread > 0) "🔔 $unread" else "🔔"; textSize = 18f
@@ -141,17 +149,17 @@ class MainActivity : BaseActivity() {
 
         if (Remote.hasUpdate()) {
             val c = card(p.accentSoft)
-            tv("يتوفر إصدار جديد ${Remote.latestName()}", 15f, p.accent, true, c)
+            tv(tr("يتوفر إصدار جديد ", "New version available ") + Remote.latestName(), 15f, p.accent, true, c)
             if (Remote.whatsNew().isNotBlank()) tv(Remote.whatsNew(), 13f, p.sub, parent = c)
             c.setOnClickListener { openUrl(Remote.latestUrl()) }
-            tv("اضغط للتنزيل", 13f, p.accent, parent = c)
+            tv(tr("اضغط للتنزيل", "Tap to download"), 13f, p.accent, parent = c)
         }
 
         renderMethod()
 
         if (!Sims.has(this, Manifest.permission.READ_PHONE_STATE)) {
             val c = card(p.warnSoft)
-            tv("امنح إذن «الهاتف» لعرض الشرائح.", 14f, p.warn, true, c)
+            tv(tr("امنح إذن «الهاتف» لعرض الشرائح.", "Grant the Phone permission to show SIMs."), 14f, p.warn, true, c)
             c.setOnClickListener { askPerms() }
         }
 
@@ -162,7 +170,7 @@ class MainActivity : BaseActivity() {
             val info = sims.firstOrNull { it.slot == i }
             val sel = i == s
             row.addView(TextView(this).apply {
-                text = "شريحة ${i + 1}" + (info?.carrier?.takeIf { it.isNotBlank() }?.let { "\n$it" } ?: if (info == null && sims.isNotEmpty()) "\nفارغة" else "")
+                text = "SIM ${i + 1}" + (info?.carrier?.takeIf { it.isNotBlank() }?.let { "\n$it" } ?: if (info == null && sims.isNotEmpty()) tr("\nفارغة", "\nEmpty") else "")
                 gravity = Gravity.CENTER; textSize = 14f
                 typeface = Typeface.DEFAULT_BOLD
                 setTextColor(if (sel) Color.WHITE else p.text)
@@ -184,16 +192,16 @@ class MainActivity : BaseActivity() {
             st.addView(r)
         }
         val curMode = cur[s]
-        line("النمط الحالي", if (Shell.ready()) famLabel(curMode) else (Prefs.last(s)?.title ?: "غير معروف (بدون Shizuku)"))
+        line(tr("النمط الحالي", "Current mode"), if (Shell.ready()) famLabel(curMode) else (Prefs.last(s)?.title ?: tr("غير معروف (بدون Shizuku)", "Unknown (no Shizuku)")))
         if (info != null) {
-            line("الشبكة الآن", info.net, if (info.net == "لا شبكة") p.warn else p.text)
+            line(tr("الشبكة الآن", "Network now"), info.net, if (info.net == NO_NET()) p.warn else p.text)
             val sig = info.dbm?.let { "$it dBm" } ?: "—"
-            val q = when (info.level) { 4 -> "ممتازة"; 3 -> "جيدة"; 2 -> "متوسطة"; 1 -> "ضعيفة"; else -> "ضعيفة جداً" }
-            line("الإشارة", "$sig · $q", when (info.level) { 3, 4 -> p.accent; 2 -> p.text; else -> p.warn })
-            line("Band", info.band ?: if (Sims.has(this, Manifest.permission.ACCESS_FINE_LOCATION)) "—" else "امنح إذن الموقع")
-            line("المكالمات", info.voice, if (info.voiceOk) p.text else p.warn)
+            val q = when (info.level) { 4 -> tr("ممتازة", "Excellent"); 3 -> tr("جيدة", "Good"); 2 -> tr("متوسطة", "Fair"); 1 -> tr("ضعيفة", "Weak"); else -> tr("ضعيفة جداً", "Very weak") }
+            line(tr("الإشارة", "Signal"), "$sig · $q", when (info.level) { 3, 4 -> p.accent; 2 -> p.text; else -> p.warn })
+            line("Band", info.band ?: if (Sims.has(this, Manifest.permission.ACCESS_FINE_LOCATION)) "—" else tr("امنح إذن الموقع", "Grant location"))
+            line(tr("المكالمات", "Calls"), info.voice, if (info.voiceOk) p.text else p.warn)
         } else if (sims.isNotEmpty()) {
-            line("الحالة", "لا توجد شريحة في هذا المنفذ", p.warn)
+            line(tr("الحالة", "Status"), tr("لا توجد شريحة في هذا المنفذ", "No SIM in this slot"), p.warn)
         }
         if (info?.band == null && !Sims.has(this, Manifest.permission.ACCESS_FINE_LOCATION)) {
             st.setOnClickListener { requestPermissions(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION), 2) }
@@ -204,19 +212,19 @@ class MainActivity : BaseActivity() {
         if (end > System.currentTimeMillis()) {
             val left = ((end - System.currentTimeMillis()) / 60000L).toInt() + 1
             val c = card(p.accentSoft)
-            tv("⏱ يرجع للتلقائي الشامل بعد $left دقيقة — اضغط للإلغاء", 14f, p.accent, true, c)
+            tv(tr("⏱ يرجع إلى Auto بعد $left دقيقة — اضغط للإلغاء", "⏱ Back to Auto in $left min — tap to cancel"), 14f, p.accent, true, c)
             c.setOnClickListener { Timers.cancel(this, s); Prefs.setTimed(s, false); render() }
         }
 
         // أزرار الأنماط
-        section("اختر النمط لشريحة ${s + 1}")
+        section(tr("اختر النمط — SIM ${s + 1}", "Choose mode — SIM ${s + 1}"))
         for (m in Prefs.visible) modeButton(s, m, curMode)
 
         // تطبيق المفضّل على الشريحتين
         val p0 = Prefs.preferred(0); val p1 = Prefs.preferred(1)
         if (p0 != null || p1 != null) {
-            button("تطبيق المفضّل على الشريحتين" +
-                "\n" + listOfNotNull(p0?.let { "ش1: ${it.title}" }, p1?.let { "ش2: ${it.title}" }).joinToString(" · "), filled = false) {
+            button(tr("تطبيق المفضّل على الشريحتين", "Apply favourites to both SIMs") +
+                "\n" + listOfNotNull(p0?.let { "SIM1: ${it.title}" }, p1?.let { "SIM2: ${it.title}" }).joinToString(" · "), filled = false) {
                 applyPreferred()
             }
         }
@@ -226,7 +234,7 @@ class MainActivity : BaseActivity() {
         if (others.isNotEmpty()) {
             var open = false
             val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; visibility = View.GONE }
-            val t = tv("▾ أنماط أخرى (${others.size})", 14f, p.accent, true).apply {
+            val t = tv(tr("▾ أنماط أخرى (${others.size})", "▾ More modes (${others.size})"), 14f, p.accent, true).apply {
                 setPadding(dp(4), dp(10), dp(4), dp(10))
             }
             root.addView(box)
@@ -235,7 +243,7 @@ class MainActivity : BaseActivity() {
         }
 
         spacer(6)
-        tv("فحص التوافق  ·  الإصدار ${BuildConfig.VERSION_NAME}", 13f, p.sub).apply {
+        tv(tr("فحص التوافق  ·  الإصدار ", "Compatibility check  ·  version ") + BuildConfig.VERSION_NAME, 13f, p.sub).apply {
             gravity = Gravity.CENTER
             setOnClickListener { startActivity(Intent(this@MainActivity, CompatActivity::class.java)) }
         }
@@ -244,25 +252,25 @@ class MainActivity : BaseActivity() {
     private fun renderMethod() {
         val k = Shell.kind()
         if (k != Shell.Kind.NONE) {
-            tv("✓ التطبيق المباشر يعمل عبر ${Shell.kindLabel()}", 13f, p.accent).apply { setPadding(dp(4), 0, dp(4), dp(8)) }
+            tv(tr("✓ التطبيق المباشر يعمل عبر ", "✓ Direct apply works via ") + Shell.kindLabel(), 13f, p.accent).apply { setPadding(dp(4), 0, dp(4), dp(8)) }
             return
         }
         val c = card(p.warnSoft)
         when {
             !Remote.on("shizuku_apply") ->
-                tv("التطبيق المباشر متوقف مؤقتاً من المطوّر. الأزرار ستفتح قائمة Phone info مع الشرح.", 14f, p.warn, true, c)
+                tv(tr("التطبيق المباشر متوقف مؤقتاً من المطوّر. الأزرار ستفتح الإعدادات مع الشرح.", "Direct apply is paused by the developer. Buttons will open settings with instructions."), 14f, p.warn, true, c)
             Shell.shizukuRunning() && !Shell.shizukuGranted() -> {
-                tv("Shizuku يعمل — بقي منح الإذن للتطبيق", 15f, p.warn, true, c)
-                button("منح الإذن", parent = c) {
-                    try { Shizuku.requestPermission(7) } catch (e: Throwable) { toast("حدّث تطبيق Shizuku") }
+                tv(tr("Shizuku يعمل — بقي منح الإذن للتطبيق", "Shizuku is running — grant permission"), 15f, p.warn, true, c)
+                button(tr("منح الإذن", "Grant permission"), parent = c) {
+                    try { Shizuku.requestPermission(7) } catch (e: Throwable) { toast(tr("حدّث تطبيق Shizuku", "Update Shizuku")) }
                 }
             }
             else -> {
-                tv("⚠ الوضع اليدوي", 15f, p.warn, true, c)
-                tv(if (Shell.shizukuInstalled(this)) "Shizuku مثبّت لكنه متوقف. شغّله ليعمل التطبيق بضغطة واحدة."
-                   else "فعّل Shizuku مرة واحدة ليعمل التطبيق بضغطة واحدة. بدونه تفتح الأزرار قائمة Phone info مع الشرح.",
+                tv(tr("⚠ الوضع اليدوي", "⚠ Manual mode"), 15f, p.warn, true, c)
+                tv(if (Shell.shizukuInstalled(this)) tr("Shizuku مثبّت لكنه متوقف. شغّله ليعمل التطبيق بضغطة واحدة.", "Shizuku is installed but stopped. Start it for one-tap switching.")
+                   else tr("بدون Shizuku تفتح الأزرار إعدادات الهاتف مع شرح ما تختاره. فعّل Shizuku مرة واحدة للتغيير بضغطة واحدة.", "Without Shizuku, buttons open phone settings with instructions. Enable Shizuku once for one-tap switching."),
                     13f, p.text, parent = c)
-                button("طريقة التفعيل", parent = c) { startActivity(Intent(this, GuideActivity::class.java)) }
+                button(tr("طريقة التفعيل", "How to enable"), parent = c) { startActivity(Intent(this, GuideActivity::class.java)) }
             }
         }
     }
@@ -286,11 +294,11 @@ class MainActivity : BaseActivity() {
         if (m == Mode.LTE_ONLY && Remote.on("lte_timer")) {
             val items = TIMER_CHOICES.map { timerLabel(it) }
             AlertDialog.Builder(this)
-                .setTitle("LTE فقط — شريحة ${s + 1}")
+                .setTitle("LTE Only — SIM ${s + 1}")
                 .setItems(items.toTypedArray()) { _, w -> doApply(s, m, TIMER_CHOICES[w]) }
-                .setNegativeButton("إلغاء", null)
+                .setNegativeButton(tr("إلغاء", "Cancel"), null)
                 .show()
-            toast("تنبيه: المكالمات قد لا تصلك. اختر مدة يرجع بعدها للتلقائي.")
+            toast(tr("تنبيه: المكالمات قد لا تصلك. اختر مدة يرجع بعدها إلى Auto.", "Note: calls may fail. Choose when to return to Auto."))
             return
         }
         doApply(s, m, -1)
@@ -298,7 +306,7 @@ class MainActivity : BaseActivity() {
 
     private fun doApply(s: Int, m: Mode, timer: Int) {
         busy = true
-        val dlg = AlertDialog.Builder(this).setMessage("جارٍ التطبيق…").setCancelable(false).show()
+        val dlg = AlertDialog.Builder(this).setMessage(tr("جارٍ التطبيق…", "Applying…")).setCancelable(false).show()
         bg.execute {
             val r = Net.applyAndRecord(this, s, m, timer)
             val now = Net.current(s)
@@ -306,12 +314,12 @@ class MainActivity : BaseActivity() {
                 busy = false
                 try { dlg.dismiss() } catch (_: Exception) {}
                 cur[s] = now
-                if (r.ok) toast("✓ ${m.title} — شريحة ${s + 1}" + if (r.msg.isNotBlank()) "\n${r.msg}" else "")
+                if (r.ok) toast("✓ ${m.title} — SIM ${s + 1}" + if (r.msg.isNotBlank()) "\n${r.msg}" else "")
                 else AlertDialog.Builder(this)
-                    .setTitle("تعذّر التطبيق المباشر")
-                    .setMessage("${r.msg}\n\nيمكنك تطبيقه يدوياً من قائمة Phone info.")
-                    .setPositiveButton("الطريقة اليدوية") { _, _ -> manual(s, m) }
-                    .setNegativeButton("إغلاق", null).show()
+                    .setTitle(tr("تعذّر التطبيق المباشر", "Direct apply failed"))
+                    .setMessage(r.msg + tr("\n\nيمكنك تطبيقه يدوياً.", "\n\nYou can apply it manually."))
+                    .setPositiveButton(tr("الطريقة اليدوية", "Manual way")) { _, _ -> manual(s, m) }
+                    .setNegativeButton(tr("إغلاق", "Close"), null).show()
                 render()
                 main.postDelayed({ refresh(false) }, 3000)
             }
@@ -319,7 +327,7 @@ class MainActivity : BaseActivity() {
     }
 
     private fun applyPreferred() {
-        if (!Shell.ready()) { toast("يحتاج Shizuku"); return }
+        if (!Shell.ready()) { toast(tr("يحتاج Shizuku", "Needs Shizuku")); return }
         busy = true
         bg.execute {
             val out = mutableListOf<String>()
@@ -327,31 +335,52 @@ class MainActivity : BaseActivity() {
                 val m = Prefs.preferred(s) ?: continue
                 if (sims.none { it.slot == s }) continue
                 val r = Net.applyAndRecord(this, s, m)
-                out += "ش${s + 1}: ${m.title} " + if (r.ok) "✓" else "✗ ${r.msg}"
+                out += "SIM${s + 1}: ${m.title} " + if (r.ok) "✓" else "✗ ${r.msg}"
                 cur[s] = Net.current(s)
             }
-            main.post { busy = false; toast(out.joinToString("\n").ifBlank { "لا توجد شرائح" }); render() }
+            main.post { busy = false; toast(out.joinToString("\n").ifBlank { tr("لا توجد شرائح", "No SIMs") }); render() }
         }
     }
 
-    /** الطريقة اليدوية: شرح ثم فتح قائمة Phone info. */
+    /** الطريقة اليدوية: إعدادات سامسونج إن كان النمط فيها، وإلا القائمة المخفية. */
     fun manual(s: Int, m: Mode) {
         Prefs.setLast(s, m.name)
+        val viaSamsung = Net.isSamsung && m.samsung != null
+        val steps = if (viaSamsung) tr(
+            "في الشاشة التالية (إعدادات سامسونج):\n\n1) اضغط «وضع الشبكة» لـ SIM ${s + 1}\n2) اختر:\n     ${m.samsung}\n3) ارجع للتطبيق.",
+            "On the next screen (Samsung settings):\n\n1) Tap \"Network mode\" for SIM ${s + 1}\n2) Choose:\n     ${m.samsung}\n3) Come back to the app.")
+        else tr(
+            "في الشاشة التالية:\n\n1) إذا فُتح تطبيق الهاتف والكود مكتوب ولم يحدث شيء: احذف آخر # وأعد كتابتها.\n" +
+                "2) اختر «Phone information» (أو معلومات الهاتف).\n3) من الأعلى اختر Phone index: Phone$s\n" +
+                "4) من «Set Preferred Network Type» اختر:\n     ${m.radioInfo}\n5) ارجع للتطبيق.",
+            "On the next screen:\n\n1) If the Phone app opens with the code typed and nothing happens: delete the last # and type it again.\n" +
+                "2) Choose \"Phone information\".\n3) At the top choose Phone index: Phone$s\n" +
+                "4) In \"Set Preferred Network Type\" choose:\n     ${m.radioInfo}\n5) Come back to the app.")
         AlertDialog.Builder(this)
-            .setTitle("${m.title} — شريحة ${s + 1}")
-            .setMessage("في الشاشة التالية:\n\n1) من الأعلى اختر Phone index: Phone$s\n" +
-                "2) من «Set Preferred Network Type» اختر:\n     ${m.radioInfo}\n3) ارجع للتطبيق.\n\n" +
-                (m.warn?.let { "⚠ $it\n\n" } ?: "") +
-                "لتطبيق النمط بضغطة واحدة بدون هذه الخطوات فعّل Shizuku.")
-            .setPositiveButton("فتح القائمة") { _, _ ->
-                if (!Net.openRadioInfo(this)) {
-                    AlertDialog.Builder(this).setMessage("قائمة Phone info غير متاحة على جهازك. فعّل Shizuku.")
-                        .setPositiveButton("طريقة التفعيل") { _, _ -> startActivity(Intent(this, GuideActivity::class.java)) }
+            .setTitle("${m.title} — SIM ${s + 1}")
+            .setMessage(steps + "\n\n" + (m.warn?.let { "⚠ $it\n\n" } ?: "") +
+                tr("للتغيير بضغطة واحدة بدون هذه الخطوات فعّل Shizuku.", "Enable Shizuku to switch with one tap."))
+            .setPositiveButton(if (viaSamsung) tr("فتح الإعدادات", "Open settings") else tr("فتح القائمة", "Open menu")) { _, _ ->
+                val ok = if (viaSamsung) Net.openSamsungNetwork(this) else Net.openRadioInfo(this)
+                if (!ok) {
+                    AlertDialog.Builder(this)
+                        .setMessage(tr("تعذّر فتح الصفحة. افتح تطبيق الهاتف واكتب ${Net.SECRET} أو فعّل Shizuku.",
+                            "Could not open it. Open the Phone app and dial ${Net.SECRET}, or enable Shizuku."))
+                        .setPositiveButton(tr("طريقة التفعيل", "How to enable")) { _, _ -> startActivity(Intent(this, GuideActivity::class.java)) }
                         .show()
                 }
             }
-            .setNeutralButton("تفعيل Shizuku") { _, _ -> startActivity(Intent(this, GuideActivity::class.java)) }
-            .setNegativeButton("إلغاء", null)
+            .setNeutralButton(if (viaSamsung) tr("القائمة المخفية", "Hidden menu") else "Shizuku") { _, _ ->
+                if (viaSamsung) {
+                    // نفس الشرح لكن عبر القائمة المخفية
+                    AlertDialog.Builder(this).setTitle("${m.title} — SIM ${s + 1}")
+                        .setMessage(tr("اختر «Phone information» ← Phone index: Phone$s ← Set Preferred Network Type: ${m.radioInfo}",
+                            "Choose \"Phone information\" → Phone index: Phone$s → Set Preferred Network Type: ${m.radioInfo}"))
+                        .setPositiveButton(tr("فتح القائمة", "Open menu")) { _, _ -> Net.openRadioInfo(this) }
+                        .show()
+                } else startActivity(Intent(this, GuideActivity::class.java))
+            }
+            .setNegativeButton(tr("إلغاء", "Cancel"), null)
             .show()
     }
 }

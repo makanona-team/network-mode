@@ -22,6 +22,17 @@ import android.telephony.TelephonyManager
 import org.json.JSONObject
 import java.util.UUID
 
+/** اللغة: "auto" = لغة الهاتف، أو "ar" أو "en". */
+object L {
+    val sys: String = try {
+        android.content.res.Resources.getSystem().configuration.locales[0].language
+    } catch (_: Exception) { "ar" }
+    fun en(): Boolean = when (Prefs.lang) { "en" -> true; "ar" -> false; else -> sys != "ar" }
+    fun tag() = if (en()) "en" else "ar"
+}
+
+fun tr(ar: String, en: String) = if (L.en()) en else ar
+
 class App : Application() {
     override fun onCreate() {
         super.onCreate()
@@ -39,6 +50,7 @@ object Prefs {
     private fun b(k: String, d: Boolean) = sp.getBoolean(k, d)
     private fun pb(k: String, v: Boolean) = sp.edit().putBoolean(k, v).apply()
 
+    var lang: String get() = sp.getString("lang", "auto") ?: "auto"; set(v) = sp.edit().putString("lang", v).apply()
     var slot: Int get() = sp.getInt("slot", 0); set(v) = sp.edit().putInt("slot", v).apply()
 
     var visible: List<Mode>
@@ -150,8 +162,8 @@ object Shortcuts {
 
     private fun info(c: Context, slot: Int, m: Mode): ShortcutInfo =
         ShortcutInfo.Builder(c, "m_${slot}_${m.name}")
-            .setShortLabel("${m.title} · ش${slot + 1}")
-            .setLongLabel("${m.title} — شريحة ${slot + 1}")
+            .setShortLabel(m.title.substringBefore(" (") + " · SIM${slot + 1}")
+            .setLongLabel("${m.title} — SIM ${slot + 1}")
             .setIcon(Icon.createWithResource(c, R.mipmap.ic_launcher))
             .setIntent(intent(c, slot, m))
             .build()
@@ -183,6 +195,8 @@ data class SimInfo(
     val voice: String,
     val dataOk: Boolean
 )
+
+fun NO_NET() = tr("لا شبكة", "No service")
 
 object Sims {
     fun has(c: Context, p: String) = c.checkSelfPermission(p) == PackageManager.PERMISSION_GRANTED
@@ -245,13 +259,13 @@ object Sims {
             } catch (_: Throwable) {}
         }
         val voice = when {
-            ss == null -> "غير معروفة (امنح إذن الموقع)"
-            !voiceOk && dataOk -> "غير متاحة ⚠ (لا VoLTE على هذا النمط)"
-            !voiceOk -> "غير متاحة"
+            ss == null -> tr("غير معروفة (امنح إذن الموقع)", "Unknown (grant location)")
+            !voiceOk && dataOk -> tr("غير متاحة ⚠ (لا VoLTE على هذا النمط)", "Unavailable ⚠ (no VoLTE on this mode)")
+            !voiceOk -> tr("غير متاحة", "Unavailable")
             voiceT == TelephonyManager.NETWORK_TYPE_LTE || voiceT == TelephonyManager.NETWORK_TYPE_NR ||
-                voiceT == TelephonyManager.NETWORK_TYPE_IWLAN -> "تعمل عبر 4G (VoLTE)"
-            else -> "تعمل" + (gen(voiceT).takeIf { it.isNotBlank() }?.let { " عبر $it" } ?: "")
+                voiceT == TelephonyManager.NETWORK_TYPE_IWLAN -> tr("تعمل عبر 4G (VoLTE)", "Working over 4G (VoLTE)")
+            else -> tr("تعمل", "Working") + (gen(voiceT).takeIf { it.isNotBlank() }?.let { tr(" عبر $it", " over $it") } ?: "")
         }
-        return SimInfo(slot, subId, carrier, if (net.isBlank()) "لا شبكة" else net, dbm, level, band, voiceOk, voice, dataOk)
+        return SimInfo(slot, subId, carrier, if (net.isBlank()) NO_NET() else net, dbm, level, band, voiceOk, voice, dataOk)
     }
 }

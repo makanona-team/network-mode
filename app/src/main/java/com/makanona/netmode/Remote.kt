@@ -140,9 +140,9 @@ object Notif {
 
     fun channels(c: Context) {
         val nm = c.getSystemService(NotificationManager::class.java)
-        nm.createNotificationChannel(NotificationChannel(STATUS, "حالة الشبكة", NotificationManager.IMPORTANCE_LOW))
-        nm.createNotificationChannel(NotificationChannel(ALERT, "تنبيهات الشبكة", NotificationManager.IMPORTANCE_HIGH))
-        nm.createNotificationChannel(NotificationChannel(NEWS, "إعلانات التطبيق", NotificationManager.IMPORTANCE_DEFAULT))
+        nm.createNotificationChannel(NotificationChannel(STATUS, tr("حالة الشبكة", "Network status"), NotificationManager.IMPORTANCE_LOW))
+        nm.createNotificationChannel(NotificationChannel(ALERT, tr("تنبيهات الشبكة", "Network alerts"), NotificationManager.IMPORTANCE_HIGH))
+        nm.createNotificationChannel(NotificationChannel(NEWS, tr("إعلانات التطبيق", "App announcements"), NotificationManager.IMPORTANCE_DEFAULT))
     }
 
     fun open(c: Context, i: Intent, req: Int = 0): PendingIntent =

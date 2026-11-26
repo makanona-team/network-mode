@@ -1,6 +1,5 @@
-الإصدار الأول من «نمط الشبكة»:
-- 4 أزرار: تلقائي شامل، 4G + مكالمات، 4G/3G، LTE فقط (مع مؤقت وتحذير)
-- اختيار الشريحة 1 أو 2 وعرض الشبكة والإشارة والـ Band وحالة المكالمات
-- التطبيق المباشر عبر Shizuku، أو قائمة Phone info مع الشرح
-- إعادة التطبيق بعد التشغيل، تنبيه الانقطاع، زر سريع، اختصارات
-- فحص التوافق وإرسال التقرير للمطوّر
+الإصدار 1.0.1 / Version 1.0.1
+- أسماء الأنماط بالإنكليزي / Mode names in English
+- لغة التطبيق عربي أو English (زر ع/EN في الأعلى) / Arabic or English app language
+- إصلاح: الطريقة اليدوية لم تعد تفتح تطبيق ForceLTE / Fix: manual mode no longer opens ForceLTE
+- بدون Shizuku على سامسونج: تُفتح إعدادات «وضع الشبكة» مع الشرح / Without Shizuku on Samsung: opens Network mode settings with steps

@@ -39,16 +39,33 @@ abstract class BaseActivity : Activity() {
     lateinit var root: LinearLayout
     private lateinit var scroll: ScrollView
 
+    private var langAtCreate = ""
+
     fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
+    val dir get() = if (L.en()) View.LAYOUT_DIRECTION_LTR else View.LAYOUT_DIRECTION_RTL
+
+    override fun attachBaseContext(base: Context) {
+        Prefs.init(base)
+        val loc = java.util.Locale(L.tag())
+        val cfg = Configuration(base.resources.configuration)
+        cfg.setLocale(loc); cfg.setLayoutDirection(loc)
+        super.attachBaseContext(base.createConfigurationContext(cfg))
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (langAtCreate.isNotEmpty() && langAtCreate != L.tag()) recreate()
+    }
 
     override fun onCreate(b: Bundle?) {
+        langAtCreate = L.tag()
         super.onCreate(b)
         Prefs.init(this)
         p = Pal(this)
         scroll = ScrollView(this).apply { setBackgroundColor(p.bg); isFillViewport = true }
         root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            layoutDirection = View.LAYOUT_DIRECTION_RTL
+            layoutDirection = dir
             setPadding(dp(16), dp(12), dp(16), dp(28))
         }
         scroll.addView(root)
@@ -68,7 +85,7 @@ abstract class BaseActivity : Activity() {
         TextView(this).apply {
             text = s; textSize = size; setTextColor(color)
             if (bold) typeface = Typeface.DEFAULT_BOLD
-            textDirection = View.TEXT_DIRECTION_RTL
+            textDirection = View.TEXT_DIRECTION_LOCALE
             parent?.addView(this, LinearLayout.LayoutParams(-1, -2))
         }
 
@@ -76,7 +93,7 @@ abstract class BaseActivity : Activity() {
         val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
         if (back) {
             row.addView(TextView(this).apply {
-                text = "→"; textSize = 22f; setTextColor(p.text); setPadding(dp(4), dp(4), dp(12), dp(4))
+                text = if (L.en()) "←" else "→"; textSize = 22f; setTextColor(p.text); setPadding(dp(4), dp(4), dp(12), dp(4))
                 setOnClickListener { finish() }
             })
         }
@@ -134,7 +151,7 @@ abstract class BaseActivity : Activity() {
     fun toast(s: String) = Toast.makeText(this, s, Toast.LENGTH_LONG).show()
 
     fun openUrl(u: String) {
-        try { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(u))) } catch (_: Exception) { toast("تعذّر فتح الرابط") }
+        try { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(u))) } catch (_: Exception) { toast(tr("تعذّر فتح الرابط", "Could not open link")) }
     }
 
     fun spacer(h: Int = 8) = root.addView(View(this), LinearLayout.LayoutParams(-1, dp(h)))
@@ -142,13 +159,14 @@ abstract class BaseActivity : Activity() {
     fun pick(title: String, items: List<String>, onPick: (Int) -> Unit) {
         android.app.AlertDialog.Builder(this).setTitle(title)
             .setItems(items.toTypedArray()) { _, w -> onPick(w) }
-            .setNegativeButton("إلغاء", null).show()
+            .setNegativeButton(tr("إلغاء", "Cancel"), null).show()
     }
 
     fun timerLabel(min: Int) = when (min) {
-        0 -> "دائم (بدون مؤقت)"
-        30 -> "30 دقيقة"; 60 -> "ساعة"; 180 -> "3 ساعات"; 480 -> "8 ساعات"
-        else -> "$min دقيقة"
+        0 -> tr("دائم (بدون مؤقت)", "Permanent (no timer)")
+        30 -> tr("30 دقيقة", "30 minutes"); 60 -> tr("ساعة", "1 hour")
+        180 -> tr("3 ساعات", "3 hours"); 480 -> tr("8 ساعات", "8 hours")
+        else -> tr("$min دقيقة", "$min minutes")
     }
 }
 

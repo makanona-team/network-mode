@@ -53,14 +53,14 @@ class ActionReceiver : BroadcastReceiver() {
                 if (i.action == TIMER) Prefs.setTimerEnd(slot, 0)
                 val r = if (Shell.ready()) Net.applyAndRecord(c, slot, mode) else Res(false, "")
                 if (i.action == TIMER) {
-                    if (r.ok) Notif.post(c, Notif.ALERT, 300 + slot, "انتهى مؤقت LTE فقط",
-                        "رجعت شريحة ${slot + 1} إلى ${mode.title}.", Intent(c, MainActivity::class.java))
-                    else Notif.post(c, Notif.ALERT, 300 + slot, "انتهى مؤقت LTE فقط",
-                        "اضغط للرجوع إلى ${mode.title} على شريحة ${slot + 1} (Shizuku غير مفعّل).",
+                    if (r.ok) Notif.post(c, Notif.ALERT, 300 + slot, tr("انتهى مؤقت LTE Only", "LTE Only timer ended"),
+                        tr("رجعت شريحة ${slot + 1} إلى ", "SIM ${slot + 1} is back to ") + mode.title, Intent(c, MainActivity::class.java))
+                    else Notif.post(c, Notif.ALERT, 300 + slot, tr("انتهى مؤقت LTE Only", "LTE Only timer ended"),
+                        tr("اضغط للرجوع إلى ${mode.title} على شريحة ${slot + 1}", "Tap to switch SIM ${slot + 1} to ${mode.title}"),
                         Intent(c, MainActivity::class.java))
                 } else {
                     Notif.cancel(c, 200 + slot)
-                    if (!r.ok) Notif.post(c, Notif.ALERT, 300 + slot, "تعذّر التطبيق", r.msg.ifBlank { "افتح التطبيق" },
+                    if (!r.ok) Notif.post(c, Notif.ALERT, 300 + slot, tr("تعذّر التطبيق", "Could not apply"), r.msg.ifBlank { tr("افتح التطبيق", "Open the app") },
                         Intent(c, MainActivity::class.java))
                 }
             } finally { pr.finish() }
@@ -84,7 +84,7 @@ class ShortcutActivity : Activity() {
         bg.execute {
             val r = Net.applyAndRecord(app, slot, m)
             main.post {
-                Toast.makeText(app, if (r.ok) "✓ ${m.title} — شريحة ${slot + 1}" else "تعذّر: ${r.msg}", Toast.LENGTH_SHORT).show()
+                Toast.makeText(app, if (r.ok) "✓ ${m.title} — SIM ${slot + 1}" else tr("تعذّر: ", "Failed: ") + r.msg, Toast.LENGTH_SHORT).show()
             }
         }
         finish()
@@ -98,8 +98,8 @@ class NetTileService : TileService() {
     private fun update() {
         val t = qsTile ?: return
         val cur = Prefs.last(Prefs.tileSlot)
-        t.label = cur?.title ?: "نمط الشبكة"
-        if (Build.VERSION.SDK_INT >= 29) t.subtitle = "شريحة ${Prefs.tileSlot + 1}"
+        t.label = cur?.title?.substringBefore(" (") ?: tr("نمط الشبكة", "Network Mode")
+        if (Build.VERSION.SDK_INT >= 29) t.subtitle = "SIM ${Prefs.tileSlot + 1}"
         t.state = if (cur == Prefs.tileB) Tile.STATE_ACTIVE else Tile.STATE_INACTIVE
         t.updateTile()
     }
@@ -156,7 +156,7 @@ class MonitorService : Service() {
     override fun onCreate() {
         super.onCreate()
         Prefs.init(this)
-        val n = Notif.build(this, Notif.STATUS, "نمط الشبكة يعمل", "…", Intent(this, MainActivity::class.java))
+        val n = Notif.build(this, Notif.STATUS, tr("نمط الشبكة يعمل", "Network Mode is running"), "…", Intent(this, MainActivity::class.java))
             .setOngoing(true).setAutoCancel(false).build()
         if (Build.VERSION.SDK_INT >= 34) startForeground(FG_ID, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
         else startForeground(FG_ID, n)
@@ -186,9 +186,9 @@ class MonitorService : Service() {
         for (s in Sims.list(this)) {
             val m = Prefs.preferred(s.slot) ?: Prefs.last(s.slot) ?: continue
             if (m == Mode.LTE_ONLY && Prefs.timed(s.slot) && Prefs.timerEnd(s.slot) == 0L) continue
-            if (Net.apply(s.slot, m).ok) { Prefs.setLast(s.slot, m.name); done += "ش${s.slot + 1}: ${m.title}" }
+            if (Net.apply(s.slot, m).ok) { Prefs.setLast(s.slot, m.name); done += "SIM${s.slot + 1}: ${m.title}" }
         }
-        if (done.isNotEmpty()) Notif.post(this, Notif.ALERT, 400, "أُعيد تطبيق الأنماط", done.joinToString("\n"), null)
+        if (done.isNotEmpty()) Notif.post(this, Notif.ALERT, 400, tr("أُعيد تطبيق الأنماط", "Modes re-applied"), done.joinToString("\n"), null)
         if (!needed()) main.post { stopSelf() }
     }
 
@@ -202,10 +202,10 @@ class MonitorService : Service() {
     private fun check() {
         val sims = Sims.list(this)
         // الإشعار الدائم
-        val txt = if (sims.isEmpty()) "لا توجد شريحة" else sims.joinToString("\n") { s ->
-            "ش${s.slot + 1} ${s.carrier}: ${Prefs.last(s.slot)?.title ?: "—"} · ${s.net}" + (s.dbm?.let { " · $it dBm" } ?: "")
+        val txt = if (sims.isEmpty()) tr("لا توجد شريحة", "No SIM") else sims.joinToString("\n") { s ->
+            "SIM${s.slot + 1} ${s.carrier}: ${Prefs.last(s.slot)?.title ?: "—"} · ${s.net}" + (s.dbm?.let { " · $it dBm" } ?: "")
         }
-        val title = if (Shell.ready()) "نمط الشبكة" else "نمط الشبكة · Shizuku متوقف"
+        val title = if (Shell.ready()) tr("نمط الشبكة", "Network Mode") else tr("نمط الشبكة · Shizuku متوقف", "Network Mode · Shizuku stopped")
         val stillOngoing = Notif.build(this, Notif.STATUS, title, txt, Intent(this, MainActivity::class.java))
             .setOngoing(true).setAutoCancel(false).build()
         try {
@@ -223,9 +223,9 @@ class MonitorService : Service() {
                     alerted += s.slot
                     val noVolte = s.dataOk
                     Notif.post(this, Notif.ALERT, 200 + s.slot,
-                        if (noVolte) "شريحة ${s.slot + 1}: المكالمات لا تصلك" else "شريحة ${s.slot + 1}: خارج التغطية",
-                        if (noVolte) "الإنترنت يعمل لكن لا يمكن استقبال المكالمات على النمط الحالي."
-                        else "لا توجد شبكة منذ أكثر من دقيقة.",
+                        if (noVolte) tr("شريحة ${s.slot + 1}: المكالمات لا تصلك", "SIM ${s.slot + 1}: calls can't reach you") else tr("شريحة ${s.slot + 1}: خارج التغطية", "SIM ${s.slot + 1}: no service"),
+                        if (noVolte) tr("الإنترنت يعمل لكن لا يمكن استقبال المكالمات على النمط الحالي.", "Data works but calls can't be received on this mode.")
+                        else tr("لا توجد شبكة منذ أكثر من دقيقة.", "No network for over a minute."),
                         Intent(this, MainActivity::class.java),
                         Notif.applyAction(this, s.slot, Mode.LTE_CALLS, 10 + s.slot),
                         Notif.applyAction(this, s.slot, Mode.AUTO, 20 + s.slot))
