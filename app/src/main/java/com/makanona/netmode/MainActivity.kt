@@ -187,8 +187,15 @@ class MainActivity : BaseActivity() {
         val st = card()
         fun line(k: String, v: String, color: Int = p.text) {
             val r = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; setPadding(0, dp(3), 0, dp(3)) }
-            tv(k, 14f, p.sub, parent = null).also { r.addView(it, LinearLayout.LayoutParams(0, -2, 1f)) }
-            tv(v, 14f, color, true, null).also { it.gravity = Gravity.END; r.addView(it, LinearLayout.LayoutParams(0, -2, 1.4f)) }
+            r.layoutDirection = dir
+            tv(k, 14f, p.sub, parent = null).also {
+                it.gravity = if (L.en()) Gravity.LEFT else Gravity.RIGHT
+                r.addView(it, LinearLayout.LayoutParams(0, -2, 1f))
+            }
+            tv(v, 14f, color, true, null).also {
+                it.gravity = if (L.en()) Gravity.RIGHT else Gravity.LEFT
+                r.addView(it, LinearLayout.LayoutParams(0, -2, 1.4f).apply { marginStart = dp(8) })
+            }
             st.addView(r)
         }
         val curMode = cur[s]

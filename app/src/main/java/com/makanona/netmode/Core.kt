@@ -9,7 +9,6 @@ import android.os.Build
 import android.provider.Settings
 import android.telecom.TelecomManager
 import rikka.shizuku.Shizuku
-import java.util.concurrent.TimeUnit
 
 const val G2 = 1
 const val G3 = 2
@@ -101,10 +100,13 @@ object Shell {
             val err = StringBuilder()
             val t2 = Thread { try { err.append(p.errorStream.bufferedReader().readText()) } catch (_: Exception) {} }
             t1.start(); t2.start()
-            val done = p.waitFor(timeoutSec, TimeUnit.SECONDS)
-            if (!done) { try { p.destroy() } catch (_: Exception) {}; return -2 to tr("انتهت المهلة", "Timed out") }
-            t1.join(1000); t2.join(1000)
-            p.exitValue() to (out.toString() + err.toString()).trim()
+            // لا نستخدم waitFor(timeout): عملية Shizuku ترمي IllegalArgumentException من exitValue() قبل الانتهاء.
+            var code = -9
+            val w = Thread { try { code = p.waitFor() } catch (_: Throwable) {} }
+            w.start(); w.join(timeoutSec * 1000)
+            if (w.isAlive) { try { p.destroy() } catch (_: Exception) {}; return -2 to tr("انتهت المهلة", "Timed out") }
+            t1.join(2000); t2.join(2000)
+            code to (out.toString() + err.toString()).trim()
         } catch (e: Throwable) {
             -3 to (e.javaClass.simpleName + ": " + (e.message ?: ""))
         }
@@ -114,7 +116,7 @@ object Shell {
     fun testRoot(): Boolean = try {
         val p = Runtime.getRuntime().exec(arrayOf("su", "-c", "id"))
         val o = p.inputStream.bufferedReader().readText()
-        p.waitFor(8, TimeUnit.SECONDS) && o.contains("uid=0")
+        p.waitFor(); o.contains("uid=0")
     } catch (e: Throwable) { false }
 
     private fun shizukuProcess(cmd: Array<String>): Process {

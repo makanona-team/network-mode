@@ -85,7 +85,7 @@ abstract class BaseActivity : Activity() {
         TextView(this).apply {
             text = s; textSize = size; setTextColor(color)
             if (bold) typeface = Typeface.DEFAULT_BOLD
-            textDirection = View.TEXT_DIRECTION_LOCALE
+            textDirection = if (L.en()) View.TEXT_DIRECTION_LTR else View.TEXT_DIRECTION_RTL
             parent?.addView(this, LinearLayout.LayoutParams(-1, -2))
         }
 
