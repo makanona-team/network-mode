@@ -6,4 +6,3 @@ workers_dev = true
 [[kv_namespaces]]
 binding = "KV"
 id = "__KV_ID__"
-# deploy 1795693184

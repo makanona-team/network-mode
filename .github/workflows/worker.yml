@@ -54,4 +54,4 @@ jobs:
           git config user.name github-actions
           git config user.email actions@github.com
           git add bootstrap.json
-          git diff --cached --quiet || { git commit -m "bootstrap: $URL"; git pull --rebase; git push; }
+          git diff --cached --quiet || { git commit -m "bootstrap: $URL"; git pull --rebase --autostash; git push; }
