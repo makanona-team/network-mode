@@ -1,0 +1,52 @@
+name: Build APK
+
+on:
+  push:
+    branches: [main]
+    paths: ['app/**', 'build.gradle.kts', 'settings.gradle.kts', 'gradle.properties', 'WHATSNEW.md', '.github/workflows/android.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: '17' }
+      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v4
+        with: { gradle-version: '8.9' }
+
+      - name: Signing key
+        env: { K: '${{ secrets.APP_SECRET }}' }
+        run: |
+          if [ -z "$K" ]; then echo "::error::أضف السر APP_SECRET في إعدادات المستودع"; exit 1; fi
+          openssl enc -d -aes-256-cbc -pbkdf2 -in keystore.enc -out app/release.jks -pass env:K
+
+      - name: Build
+        env: { KS_PASS: '${{ secrets.APP_SECRET }}' }
+        run: gradle :app:assembleRelease --no-daemon --stacktrace
+
+      - name: Version
+        run: |
+          echo "VN=$(grep -oP 'versionName\s*=\s*"\K[^"]+' app/build.gradle.kts)" >> $GITHUB_ENV
+          echo "VC=$(grep -oP 'versionCode\s*=\s*\K\d+' app/build.gradle.kts)" >> $GITHUB_ENV
+
+      - name: Publish release
+        env: { GH_TOKEN: '${{ github.token }}' }
+        run: |
+          cp app/build/outputs/apk/release/app-release.apk network-mode.apk
+          cp network-mode.apk "network-mode-$VN.apk"
+          { cat WHATSNEW.md; echo; echo "versionCode: $VC"; } > notes.md
+          if gh release view "v$VN" >/dev/null 2>&1; then
+            gh release upload "v$VN" network-mode.apk "network-mode-$VN.apk" --clobber
+            gh release edit "v$VN" --notes-file notes.md
+          else
+            gh release create "v$VN" network-mode.apk "network-mode-$VN.apk" --title "نمط الشبكة $VN" --notes-file notes.md --latest
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with: { name: network-mode-apk, path: network-mode.apk }

@@ -1,0 +1,57 @@
+name: Deploy server
+
+on:
+  push:
+    branches: [main]
+    paths: ['worker/**', '.github/workflows/worker.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: '${{ secrets.CLOUDFLARE_API_TOKEN }}'
+      CLOUDFLARE_ACCOUNT_ID: '${{ secrets.CLOUDFLARE_ACCOUNT_ID }}'
+      K: '${{ secrets.APP_SECRET }}'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+
+      - name: Check secrets
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ] || [ -z "$K" ]; then
+            echo "::error::أضف الأسرار CLOUDFLARE_API_TOKEN و CLOUDFLARE_ACCOUNT_ID و APP_SECRET"; exit 1
+          fi
+
+      - name: KV namespace
+        run: |
+          API="https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/storage/kv/namespaces"
+          ID=$(curl -s -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "$API?per_page=100" | jq -r '.result[]? | select(.title=="network-mode-kv") | .id')
+          if [ -z "$ID" ]; then
+            ID=$(curl -s -X POST -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -H "Content-Type: application/json" \
+              -d '{"title":"network-mode-kv"}' "$API" | jq -r '.result.id')
+          fi
+          if [ -z "$ID" ] || [ "$ID" = "null" ]; then echo "::error::تعذّر إنشاء KV — تأكد أن التوكن فيه صلاحية Workers KV Storage: Edit"; exit 1; fi
+          sed -i "s/__KV_ID__/$ID/" worker/wrangler.toml
+
+      - name: Deploy
+        working-directory: worker
+        run: |
+          npx -y wrangler@3 deploy 2>&1 | tee out.txt
+          echo "$K" | npx -y wrangler@3 secret put ADMIN_KEY
+          URL=$(grep -oE 'https://[a-zA-Z0-9.-]+\.workers\.dev' out.txt | head -1)
+          echo "URL=$URL" >> $GITHUB_ENV
+          echo "### السيرفر: $URL  —  لوحة الأدمن: $URL/admin" >> $GITHUB_STEP_SUMMARY
+
+      - name: Save bootstrap.json
+        run: |
+          if [ -z "$URL" ]; then echo "::warning::لم يُعرف رابط السيرفر"; exit 0; fi
+          echo "{\"api\":\"$URL\"}" > bootstrap.json
+          git config user.name github-actions
+          git config user.email actions@github.com
+          git add bootstrap.json
+          git diff --cached --quiet || { git commit -m "bootstrap: $URL"; git pull --rebase; git push; }
