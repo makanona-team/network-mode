@@ -23,7 +23,7 @@ jobs:
       - name: Signing key
         env: { K: '${{ secrets.APP_SECRET }}' }
         run: |
-          if [ -z "$K" ]; then echo "::error::أضف السر APP_SECRET في إعدادات المستودع"; exit 1; fi
+          if [ -z "$K" ]; then echo "::warning::السر APP_SECRET غير موجود — بناء تجريبي بدون نشر"; echo "NOSIGN=1" >> $GITHUB_ENV; exit 0; fi
           openssl enc -d -aes-256-cbc -pbkdf2 -in keystore.enc -out app/release.jks -pass env:K
 
       - name: Build
@@ -36,6 +36,7 @@ jobs:
           echo "VC=$(grep -oP 'versionCode\s*=\s*\K\d+' app/build.gradle.kts)" >> $GITHUB_ENV
 
       - name: Publish release
+        if: env.NOSIGN != '1'
         env: { GH_TOKEN: '${{ github.token }}' }
         run: |
           cp app/build/outputs/apk/release/app-release.apk network-mode.apk
@@ -49,4 +50,4 @@ jobs:
           fi
 
       - uses: actions/upload-artifact@v4
-        with: { name: network-mode-apk, path: network-mode.apk }
+        with: { name: network-mode-apk, path: app/build/outputs/apk/release/*.apk }
