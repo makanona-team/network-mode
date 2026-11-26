@@ -24,6 +24,9 @@ async function cfg(env) {
 }
 
 async function latest(env, force = false) {
+  // الإصدار الذي يبلّغ عنه خط البناء مباشرة (المصدر الأساسي)
+  const rel = await env.KV.get('release', 'json');
+  if (rel && rel.code) return { url: STABLE_APK, releases: rel.releases || 1, ...rel };
   if (!force) {
     const c = await env.KV.get('latest', 'json');
     if (c) return c;
@@ -133,6 +136,17 @@ export default {
         };
         const [devices, crashes, compat] = await Promise.all([list('dev:'), list('crash:'), list('compat:')]);
         return json({ config: c, latest: l, announcements: an, devices, crashes, compat, labels: SW_LABELS });
+      }
+      if (a === 'release' && m === 'POST') {
+        const b = await body(req);
+        const prev = (await env.KV.get('release', 'json')) || {};
+        const r = {
+          code: b.code | 0, name: clip(b.name, 20), notes: clip(b.notes, 3000), url: STABLE_APK,
+          releases: (prev.releases || 0) + (prev.code === (b.code | 0) ? 0 : 1), ts: Date.now(),
+        };
+        if (!r.code) return json({ error: 'code مطلوب' }, 400);
+        await env.KV.put('release', JSON.stringify(r));
+        return json({ ok: true, release: r });
       }
       if (a === 'config' && m === 'POST') {
         const b = await body(req);

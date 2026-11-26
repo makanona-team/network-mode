@@ -48,5 +48,15 @@ jobs:
             gh release create "v$VN" network-mode.apk "network-mode-$VN.apk" --title "نمط الشبكة $VN" --notes-file notes.md --latest
           fi
 
+      - name: Tell server about the release
+        if: env.NOSIGN != '1'
+        env: { K: '${{ secrets.APP_SECRET }}' }
+        run: |
+          API=$(jq -r '.api // empty' bootstrap.json)
+          [ -n "$API" ] || { echo "::warning::لا يوجد رابط سيرفر بعد"; exit 0; }
+          jq -n --argjson code "$VC" --arg name "$VN" --rawfile notes WHATSNEW.md '{code:$code,name:$name,notes:$notes}' > rel.json
+          curl -sf -X POST -H "x-key: $K" -H "content-type: application/json" --data @rel.json "$API/admin/api/release" \
+            || echo "::warning::تعذّر إبلاغ السيرفر"
+
       - uses: actions/upload-artifact@v4
         with: { name: network-mode-apk, path: app/build/outputs/apk/release/*.apk }
