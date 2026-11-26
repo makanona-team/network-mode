@@ -32,6 +32,7 @@ class BootReceiver : BroadcastReceiver() {
         val boot = i.action == Intent.ACTION_BOOT_COMPLETED
         if (boot) Timers.restore(c)
         if (boot && Prefs.reapplyOnBoot && Remote.on("boot_reapply")) Prefs.pendingReapply = true
+        CheckJob.schedule(c)
         MonitorService.sync(c, force = Prefs.pendingReapply)
     }
 }
@@ -130,8 +131,8 @@ class NetTileService : TileService() {
 class MonitorService : Service() {
     companion object {
         const val FG_ID = 1
-        fun needed() = Prefs.persistent || (Prefs.dropAlert && Remote.on("drop_alert")) ||
-            (Prefs.callSwitch && Remote.on("call_switch")) || Prefs.pendingReapply
+        /** الخدمة الدائمة (ومعها الإشعار) فقط عند الحاجة الفعلية. */
+        fun needed() = Prefs.persistent || (Prefs.callSwitch && Remote.on("call_switch")) || Prefs.pendingReapply
 
         fun sync(c: Context, force: Boolean = false) {
             Prefs.init(c)
@@ -205,33 +206,20 @@ class MonitorService : Service() {
         val txt = if (sims.isEmpty()) tr("لا توجد شريحة", "No SIM") else sims.joinToString("\n") { s ->
             "SIM${s.slot + 1} ${s.carrier}: ${Prefs.last(s.slot)?.title ?: "—"} · ${s.net}" + (s.dbm?.let { " · $it dBm" } ?: "")
         }
-        val title = if (Shell.ready()) tr("نمط الشبكة", "Network Mode") else tr("نمط الشبكة · Shizuku متوقف", "Network Mode · Shizuku stopped")
-        val stillOngoing = Notif.build(this, Notif.STATUS, title, txt, Intent(this, MainActivity::class.java))
-            .setOngoing(true).setAutoCancel(false).build()
-        try {
-            getSystemService(android.app.NotificationManager::class.java).notify(FG_ID, stillOngoing)
-        } catch (_: Exception) {}
-
-        // تنبيه الانقطاع
-        if (Prefs.dropAlert && Remote.on("drop_alert") && callState == TelephonyManager.CALL_STATE_IDLE) {
-            val now = System.currentTimeMillis()
-            for (s in sims) {
-                val bad = !s.voiceOk
-                if (!bad) { outSince.remove(s.slot); alerted.remove(s.slot); Notif.cancel(this, 200 + s.slot); continue }
-                val since = outSince.getOrPut(s.slot) { now }
-                if (now - since >= 60_000 && s.slot !in alerted) {
-                    alerted += s.slot
-                    val noVolte = s.dataOk
-                    Notif.post(this, Notif.ALERT, 200 + s.slot,
-                        if (noVolte) tr("شريحة ${s.slot + 1}: المكالمات لا تصلك", "SIM ${s.slot + 1}: calls can't reach you") else tr("شريحة ${s.slot + 1}: خارج التغطية", "SIM ${s.slot + 1}: no service"),
-                        if (noVolte) tr("الإنترنت يعمل لكن لا يمكن استقبال المكالمات على النمط الحالي.", "Data works but calls can't be received on this mode.")
-                        else tr("لا توجد شبكة منذ أكثر من دقيقة.", "No network for over a minute."),
-                        Intent(this, MainActivity::class.java),
-                        Notif.applyAction(this, s.slot, Mode.LTE_CALLS, 10 + s.slot),
-                        Notif.applyAction(this, s.slot, Mode.AUTO, 20 + s.slot))
-                }
-            }
+        val waiting = Prefs.pendingReapply && !Shell.ready()
+        val title = when {
+            waiting -> tr("بانتظار Shizuku", "Waiting for Shizuku")
+            Shell.ready() -> tr("نمط الشبكة", "Network Mode")
+            else -> tr("نمط الشبكة · Shizuku متوقف", "Network Mode · Shizuku stopped")
         }
+        val body = if (waiting) tr("اضغط لتشغيل Shizuku، وستُعاد أنماطك تلقائياً.", "Tap to start Shizuku; your modes will be re-applied.") else txt
+        val tap = if (waiting) packageManager.getLaunchIntentForPackage(Shell.SHIZUKU_PKG) ?: Intent(this, GuideActivity::class.java)
+                  else Intent(this, MainActivity::class.java)
+        val ongoing = Notif.build(this, Notif.STATUS, title, body, tap).setOngoing(true).setAutoCancel(false).build()
+        try { getSystemService(android.app.NotificationManager::class.java).notify(FG_ID, ongoing) } catch (_: Exception) {}
+
+        Drops.observe(this, sims)
+        NetWidget.update(this)
 
         // الإعلانات والإعدادات البعيدة
         if (System.currentTimeMillis() - lastRefresh > 6 * 3600_000L) {

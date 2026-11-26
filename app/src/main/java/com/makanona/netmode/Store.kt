@@ -40,6 +40,8 @@ class App : Application() {
         Remote.load()
         Notif.channels(this)
         Remote.installCrashHandler()
+        CheckJob.schedule(this)
+        MonitorService.sync(this)
     }
 }
 
@@ -73,6 +75,13 @@ object Prefs {
     var pendingReapply get() = b("pending", false); set(v) = pb("pending", v)
     var firstRunDone get() = b("first", false); set(v) = pb("first", v)
 
+    var lteGuard get() = b("guard", true); set(v) = pb("guard", v)
+    var dropLog: String get() = sp.getString("droplog", "[]") ?: "[]"; set(v) = sp.edit().putString("droplog", v).apply()
+    fun simState(slot: Int) = sp.getString("st_$slot", "") ?: ""
+    fun simSince(slot: Int) = sp.getLong("stt_$slot", 0L)
+    fun setSimState(slot: Int, s: String, t: Long) = sp.edit().putString("st_$slot", s).putLong("stt_$slot", t).apply()
+    fun alerted(slot: Int) = b("al_$slot", false)
+    fun setAlerted(slot: Int, v: Boolean) = pb("al_$slot", v)
     var lteTimerMin: Int get() = sp.getInt("ltetimer", 60); set(v) = sp.edit().putInt("ltetimer", v).apply()
     fun timerEnd(slot: Int) = sp.getLong("tend_$slot", 0L)
     fun setTimerEnd(slot: Int, t: Long) = sp.edit().putLong("tend_$slot", t).apply()
@@ -99,7 +108,7 @@ object Prefs {
     /** نسخة الإعدادات للنسخ الاحتياطي. */
     fun export(): JSONObject {
         val o = JSONObject()
-        for ((k, v) in sp.all) if (k !in setOf("did", "api", "cfg", "crash", "ping", "fetch", "read", "notified")) o.put(k, v)
+        for ((k, v) in sp.all) if (k !in setOf("did", "api", "cfg", "crash", "ping", "fetch", "read", "notified", "droplog") && !k.startsWith("st") && !k.startsWith("al_")) o.put(k, v)
         return o
     }
 
@@ -207,7 +216,10 @@ object Sims {
         val subs = try { sm.activeSubscriptionInfoList } catch (e: SecurityException) { null } ?: return emptyList()
         return subs.sortedBy { it.simSlotIndex }.map { s ->
             val tm = c.getSystemService(TelephonyManager::class.java).createForSubscriptionId(s.subscriptionId)
-            read(c, tm, s.simSlotIndex, s.subscriptionId, s.carrierName?.toString().orEmpty().ifBlank { tm.networkOperatorName ?: "" })
+            var name = s.displayName?.toString().orEmpty().ifBlank { s.carrierName?.toString().orEmpty() }
+                .ifBlank { tm.networkOperatorName ?: "" }
+            if (name.contains("Emergency", true) || name.contains("طوارئ") || name.contains("No service", true)) name = NO_NET()
+            read(c, tm, s.simSlotIndex, s.subscriptionId, name)
         }
     }
 

@@ -88,13 +88,18 @@ object Shell {
     }
 
     /** يعيد (رمز الخروج، المخرجات). يُستدعى من خيط خلفي فقط. */
-    fun exec(cmd: String, timeoutSec: Long = 10): Pair<Int, String> {
+    fun exec(cmd: String, timeoutSec: Long = 10): Pair<Int, String> = execInput(cmd, null, timeoutSec)
+
+    /** مثل exec مع إرسال ملف إلى stdin (للتثبيت الصامت). */
+    fun execInput(cmd: String, input: java.io.File?, timeoutSec: Long = 10): Pair<Int, String> {
         return try {
             val p: Process = when (kind()) {
                 Kind.SHIZUKU -> shizukuProcess(arrayOf("sh", "-c", cmd))
                 Kind.ROOT -> Runtime.getRuntime().exec(arrayOf("su", "-c", cmd))
                 Kind.NONE -> return -1 to tr("لا توجد صلاحية (Shizuku غير مفعّل)", "No permission (Shizuku not active)")
             }
+            if (input != null) p.outputStream.use { os -> input.inputStream().use { it.copyTo(os) } }
+            else try { p.outputStream.close() } catch (_: Exception) {}
             val out = StringBuilder()
             val t1 = Thread { try { out.append(p.inputStream.bufferedReader().readText()) } catch (_: Exception) {} }
             val err = StringBuilder()
@@ -206,7 +211,9 @@ object Net {
             val timed = mode == Mode.LTE_ONLY && m > 0 && Remote.on("lte_timer")
             Prefs.setTimed(slot, timed)
             if (timed) Timers.schedule(c, slot, m)
+            if (mode == Mode.LTE_ONLY) Guard.arm(c, slot)
             Shortcuts.refresh(c)
+            NetWidget.update(c)
         }
         return r
     }

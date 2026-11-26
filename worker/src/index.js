@@ -4,6 +4,7 @@ const STABLE_APK = `https://github.com/${REPO}/releases/latest/download/network-
 const SW_DEFAULT = {
   shizuku_apply: true, boot_reapply: true, call_switch: true,
   drop_alert: true, lte_timer: true, telemetry: true,
+  lte_guard: true, in_app_update: true, silent_install: true,
 };
 const SW_LABELS = {
   shizuku_apply: 'التطبيق المباشر عبر Shizuku',
@@ -12,6 +13,9 @@ const SW_LABELS = {
   drop_alert: 'تنبيه الانقطاع',
   lte_timer: 'مؤقت LTE فقط',
   telemetry: 'إرسال الإحصائيات',
+  lte_guard: 'حماية LTE Only (رجوع تلقائي)',
+  in_app_update: 'التحديث من داخل التطبيق',
+  silent_install: 'التثبيت الصامت عبر Shizuku',
 };
 
 const json = (o, s = 200) => new Response(JSON.stringify(o), {

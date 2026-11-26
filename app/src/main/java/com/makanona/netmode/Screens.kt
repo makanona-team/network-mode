@@ -29,6 +29,12 @@ class SettingsActivity : BaseActivity() {
             }
         }
 
+        section(tr("أدوات", "Tools"))
+        linkRow(tr("🩺 فحص التوافق", "🩺 Compatibility check"), null) { startActivity(Intent(this, CompatActivity::class.java)) }
+        linkRow(tr("📉 سجل الانقطاعات", "📉 Signal log"), null) { startActivity(Intent(this, DropsActivity::class.java)) }
+        linkRow(tr("🧩 الويدجت", "🧩 Widget"), tr("اضغط مطوّلاً على الشاشة الرئيسية ← الأدوات (Widgets) ← «نمط الشبكة». اضغط على السطر العلوي في الويدجت للتبديل بين الشريحتين.",
+            "Long-press the home screen → Widgets → \"Network Mode\". Tap the widget's top line to switch SIM.")) {}
+
         section(tr("الأزرار على الشاشة الرئيسية", "Home screen buttons"))
         linkRow(tr("اختر الأزرار الظاهرة", "Choose visible buttons"), Prefs.visible.joinToString(" · ") { it.title }) { chooseVisible() }
 
@@ -45,14 +51,19 @@ class SettingsActivity : BaseActivity() {
             pick(tr("يرجع إلى Auto بعد", "Return to Auto after"), TIMER_CHOICES.map { timerLabel(it) }) { Prefs.lteTimerMin = TIMER_CHOICES[it]; render() }
         }
 
+        switchRow(tr("حماية LTE Only", "LTE Only protection"),
+            tr("إذا لم تجد الشريحة 4G خلال 50 ثانية ترجع تلقائياً إلى Auto", "If the SIM finds no 4G within 50 seconds, return to Auto"), Prefs.lteGuard) {
+            Prefs.lteGuard = it
+        }
+
         section(tr("تلقائي", "Automatic"))
         switchRow(tr("إعادة التطبيق بعد تشغيل الهاتف", "Re-apply after reboot"),
             tr("يرجع كل شريحة لنمطها بعد إعادة التشغيل (بعد تشغيل Shizuku)", "Restores each SIM's mode after reboot (once Shizuku starts)"), Prefs.reapplyOnBoot) {
             Prefs.reapplyOnBoot = it
         }
         switchRow(tr("تنبيه انقطاع الشبكة", "Signal loss alert"),
-            tr("إشعار إذا بقيت الشريحة بلا شبكة أو بلا مكالمات أكثر من دقيقة", "Notify if a SIM has no service or no calls for over a minute"), Prefs.dropAlert) {
-            Prefs.dropAlert = it; MonitorService.sync(this)
+            tr("فحص كل 15 دقيقة تقريباً بدون إشعار دائم (كل 30 ثانية إذا فعّلت الإشعار الدائم)", "Checks about every 15 minutes, no persistent notification (every 30 s with persistent notification)"), Prefs.dropAlert) {
+            Prefs.dropAlert = it
         }
         switchRow(tr("تحويل مؤقت أثناء المكالمة (تجريبي)", "Switch during calls (experimental)"),
             tr("عند بدء مكالمة وأنت على LTE Only يسمح بـ 3G/2G ثم يرجع بعد انتهائها. لا يحل مشكلة المكالمات الواردة.",
@@ -60,7 +71,7 @@ class SettingsActivity : BaseActivity() {
             Prefs.callSwitch = it; MonitorService.sync(this)
         }
         switchRow(tr("إشعار دائم بالحالة", "Persistent status notification"),
-            tr("يعرض النمط والإشارة لكل شريحة في شريط الإشعارات", "Shows mode and signal per SIM in the notification bar"), Prefs.persistent) {
+            tr("يعرض النمط والإشارة لكل شريحة (مطفأ افتراضياً)", "Shows mode and signal per SIM (off by default)"), Prefs.persistent) {
             Prefs.persistent = it; MonitorService.sync(this)
         }
 
@@ -145,7 +156,7 @@ class SettingsActivity : BaseActivity() {
                     when {
                         !ok -> toast(tr("تعذّر الاتصال بالسيرفر", "Could not reach the server"))
                         Remote.hasUpdate() -> AlertDialog.Builder(this).setTitle(tr("يتوفر ", "Available: ") + Remote.latestName())
-                            .setMessage(Remote.whatsNew()).setPositiveButton(tr("تنزيل", "Download")) { _, _ -> openUrl(Remote.latestUrl()) }
+                            .setMessage(Remote.whatsNew()).setPositiveButton(tr("تحديث الآن", "Update now")) { _, _ -> startUpdate() }
                             .setNegativeButton(tr("لاحقاً", "Later"), null).show()
                         else -> toast(tr("أنت على آخر إصدار", "You're on the latest version"))
                     }
@@ -289,7 +300,7 @@ class CompatActivity : BaseActivity() {
         r += Shell.shizukuInstalled(this) to "Shizuku installed"
         r += Shell.shizukuRunning() to "Shizuku running" + (try { if (Shell.shizukuRunning()) " (v${Shizuku.getVersion()}, uid ${Shizuku.getUid()})" else "" } catch (_: Throwable) { "" })
         r += Shell.shizukuGranted() to "Shizuku permission"
-        r += Prefs.useRoot to "Root (optional)"
+        r += null to "Root (optional): ${if (Prefs.useRoot) "on" else "off"}"
         r += null to "Apply method: ${Shell.kind().name}"
         if (Shell.ready()) {
             for (s in 0..1) {

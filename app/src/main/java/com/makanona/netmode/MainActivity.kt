@@ -98,7 +98,7 @@ class MainActivity : BaseActivity() {
             .setTitle(tr("تحديث إجباري", "Update required"))
             .setMessage(tr("هذه النسخة لم تعد مدعومة. يجب تنزيل النسخة ", "This version is no longer supported. Please download version ") + Remote.latestName() + "\n\n" + Remote.whatsNew())
             .setCancelable(false)
-            .setPositiveButton(tr("تنزيل التحديث", "Download update")) { _, _ -> openUrl(Remote.latestUrl()); finish() }
+            .setPositiveButton(tr("تحديث الآن", "Update now")) { _, _ -> startUpdate() }
             .show()
     }
 
@@ -113,6 +113,7 @@ class MainActivity : BaseActivity() {
     private fun refresh(full: Boolean) {
         bg.execute {
             val list = Sims.list(this)
+            if (full) Drops.observe(this, list)
             if (full || cur.isEmpty()) for (s in 0..1) cur[s] = Net.current(s)
             main.post {
                 sims = list
@@ -151,8 +152,8 @@ class MainActivity : BaseActivity() {
             val c = card(p.accentSoft)
             tv(tr("يتوفر إصدار جديد ", "New version available ") + Remote.latestName(), 15f, p.accent, true, c)
             if (Remote.whatsNew().isNotBlank()) tv(Remote.whatsNew(), 13f, p.sub, parent = c)
-            c.setOnClickListener { openUrl(Remote.latestUrl()) }
-            tv(tr("اضغط للتنزيل", "Tap to download"), 13f, p.accent, parent = c)
+            c.setOnClickListener { startUpdate() }
+            tv(tr("اضغط للتحديث الآن", "Tap to update now"), 13f, p.accent, parent = c)
         }
 
         renderMethod()
@@ -250,10 +251,15 @@ class MainActivity : BaseActivity() {
         }
 
         spacer(6)
-        tv(tr("فحص التوافق  ·  الإصدار ", "Compatibility check  ·  version ") + BuildConfig.VERSION_NAME, 13f, p.sub).apply {
-            gravity = Gravity.CENTER
-            setOnClickListener { startActivity(Intent(this@MainActivity, CompatActivity::class.java)) }
-        }
+        val tools = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; layoutDirection = dir }
+        button(tr("🩺 فحص التوافق", "🩺 Compatibility"), filled = false, parent = tools) {
+            startActivity(Intent(this, CompatActivity::class.java))
+        }.layoutParams = LinearLayout.LayoutParams(0, -2, 1f).apply { marginEnd = dp(8) }
+        button(tr("📉 سجل الانقطاعات", "📉 Signal log"), filled = false, parent = tools) {
+            startActivity(Intent(this, DropsActivity::class.java))
+        }.layoutParams = LinearLayout.LayoutParams(0, -2, 1f)
+        root.addView(tools)
+        tv(tr("الإصدار ", "Version ") + BuildConfig.VERSION_NAME, 12f, p.sub).apply { gravity = Gravity.CENTER }
     }
 
     private fun renderMethod() {
